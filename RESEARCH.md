@@ -4,3 +4,4 @@
 4. Read about replication strategies
 5. Read about communication in distrubuted systems
 6. Research about consensus algorithms
+7. Read about rebalancing
