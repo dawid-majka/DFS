@@ -6,3 +6,4 @@
 6. Research about consensus algorithms
 7. Read about rebalancing
 8. Additional research
+9. Finishing research
