@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package dfs.shared;
+
+message ChunkData {
+  string chunk_id = 1;
+  bytes data = 2;
+}
+
+message FileMetadata {
+  string name = 1;
+  int64 size = 2;
+  repeated string chunk_ids = 3;
+}

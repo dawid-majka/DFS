@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package dfs.client;
+
+// Assuming operations that a client might want to perform
+service ClientService {
+  // Creates a new file
+  rpc CreateFile(CreateFileRequest) returns (CreateFileResponse) {}
+
+  // Reads a file
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse) {}
+}
+
+message CreateFileRequest {
+  string file_path = 1;
+}
+
+message CreateFileResponse {
+  bool success = 1;
+}
+
+message ReadFileRequest {
+  string file_path = 1;
+}
+
+message ReadFileResponse {
+  bytes data = 1;
+}

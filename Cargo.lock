@@ -171,7 +171,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "chunk-server"
 version = "0.1.0"
 dependencies = [
+ "common",
  "prost",
+ "rand",
  "serde",
  "serde_json",
  "tokio",
@@ -180,9 +182,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "dfs-client"
 version = "0.1.0"
 dependencies = [
+ "common",
  "prost",
  "serde",
  "serde_json",
@@ -476,6 +488,7 @@ checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 name = "master-server"
 version = "0.1.0"
 dependencies = [
+ "common",
  "prost",
  "serde",
  "serde_json",

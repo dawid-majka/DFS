@@ -1,29 +1,44 @@
+use std::collections::HashMap;
+
+use tokio::sync::{Arc, Mutex};
 use tonic::{transport::Server, Request, Response, Status};
 
-use dfs::master_server::{Master, MasterServer};
-use dfs::{ChunkServerAddress, PingRequest, PingResponse};
-
-pub mod dfs {
-    tonic::include_proto!("dfs"); // The string specified here must match the proto package name
-}
+use common::dfs::master_server::{Master, MasterServer};
 
 #[derive(Debug, Default)]
-pub struct MyMaster {}
+pub struct MyMaster {
+    chunk_servers: Mutex<HashMap<String, String>>,
+}
 
 #[tonic::async_trait]
 impl Master for MyMaster {
-    async fn get_chunk_server_address(
+    async fn register_chunk_server(
         &self,
-        request: Request<PingRequest>, // Accept request of type PingRequest
-    ) -> Result<Response<ChunkServerAddress>, Status> {
-        // Return an instance of type PingReply
-        println!("Got a request: {:?}", request);
+        request: Request<RegisterChunkServerRequest>,
+    ) -> Result<Response<RegisterChunkServerResponse>, Status> {
+        let request = request.into_inner();
+        let server_id = request.server_id;
+        let server_address = request.server_address;
+        println!(
+            "Registering server: {} with address: {}",
+            server_id, server_address
+        );
 
-        let reply = dfs::ChunkServerAddress {
-            address: format!("Hello {}!", request.into_inner().message), // We must use .into_inner() as the fields of gRPC requests and responses are private
-        };
+        let mut servers = self.chunk_servers.lock().unwrap();
+        servers.insert(server_id, server_address);
 
-        Ok(Response::new(reply)) // Send back our formatted greeting
+        Ok(Response::new(RegisterChunkServerResponse { success: true }))
+    }
+
+    async fn list_chunk_servers(
+        &self,
+        _request: Request<ListChunkServersRequest>,
+    ) -> Result<Response<ListChunkServersResponse>, Status> {
+        let servers = self.chunk_servers.lock().unwrap().values();
+
+        Ok(Response::new(ListChunkServersResponse {
+            server_address: servers.clone(),
+        }))
     }
 }
 

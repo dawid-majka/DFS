@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+import "shared.proto";
+
+package dfs.chunk_server;
+
+service ChunkService {
+  rpc StoreChunk(StoreChunkRequest) returns (StoreChunkResponse) {}
+
+  rpc RetrieveChunk(RetrieveChunkRequest) returns (RetrieveChunkResponse) {}
+}
+
+message StoreChunkRequest {
+  shared.ChunkData chunk = 1;
+}
+
+message StoreChunkResponse {
+  bool success = 1;
+}
+
+message RetrieveChunkRequest {
+  string chunk_id = 1;
+}
+
+message RetrieveChunkResponse {
+  shared.ChunkData chunk = 1;
+}

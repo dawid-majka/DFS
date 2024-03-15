@@ -1,3 +1,3 @@
 [workspace]
-members = ["chunk-server", "dfs-client", "master-server"]
+members = ["chunk-server", "common", "dfs-client", "master-server"]
 resolver = "2"

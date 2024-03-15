@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// import "shared.proto";
+
+package dfs.master_server;
+
+service MasterService {
+  rpc RegisterChunkServer(RegisterChunkServerRequest) returns (RegisterChunkServerResponse) {}
+
+  rpc ListChunkServers(ListChunkServersRequest) returns (ListChunkServersResponse) {}
+}
+
+message RegisterChunkServerRequest {
+  string server_id = 1;
+  string server_address = 2;
+}
+
+message RegisterChunkServerResponse {
+  bool success = 1;
+}
+
+message ListChunkServersRequest {
+}
+
+message ListChunkServersResponse {
+  repeated string server_address = 1;
+}
+
+// message ListFilesRequest {}
+
+// message ListFilesResponse {
+//   repeated dfs.common.FileMetadata files = 1;
+// }
