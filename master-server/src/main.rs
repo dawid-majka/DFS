@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 
-use tokio::sync::{Arc, Mutex};
+use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 
-use common::dfs::master_server::{Master, MasterServer};
+use common::master_server::master_service_server::{MasterService, MasterServiceServer};
+use common::master_server::{
+    ListChunkServersRequest, ListChunkServersResponse, RegisterChunkServerRequest,
+    RegisterChunkServerResponse,
+};
 
 #[derive(Debug, Default)]
 pub struct MyMaster {
@@ -11,11 +15,14 @@ pub struct MyMaster {
 }
 
 #[tonic::async_trait]
-impl Master for MyMaster {
+impl MasterService for MyMaster {
     async fn register_chunk_server(
         &self,
         request: Request<RegisterChunkServerRequest>,
     ) -> Result<Response<RegisterChunkServerResponse>, Status> {
+        let addr = request.remote_addr();
+
+        println!("Request from: {:?}", addr);
         let request = request.into_inner();
         let server_id = request.server_id;
         let server_address = request.server_address;
@@ -24,7 +31,7 @@ impl Master for MyMaster {
             server_id, server_address
         );
 
-        let mut servers = self.chunk_servers.lock().unwrap();
+        let mut servers = self.chunk_servers.lock().await;
         servers.insert(server_id, server_address);
 
         Ok(Response::new(RegisterChunkServerResponse { success: true }))
@@ -34,10 +41,10 @@ impl Master for MyMaster {
         &self,
         _request: Request<ListChunkServersRequest>,
     ) -> Result<Response<ListChunkServersResponse>, Status> {
-        let servers = self.chunk_servers.lock().unwrap().values();
+        let servers = self.chunk_servers.lock().await.values().cloned().collect();
 
         Ok(Response::new(ListChunkServersResponse {
-            server_address: servers.clone(),
+            server_address: servers,
         }))
     }
 }
@@ -48,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let master = MyMaster::default();
 
     Server::builder()
-        .add_service(MasterServer::new(master))
+        .add_service(MasterServiceServer::new(master))
         .serve(addr)
         .await?;
 
