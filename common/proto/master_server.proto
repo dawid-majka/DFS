@@ -8,6 +8,8 @@ service MasterService {
   rpc RegisterChunkServer(RegisterChunkServerRequest) returns (RegisterChunkServerResponse) {}
 
   rpc ListChunkServers(ListChunkServersRequest) returns (ListChunkServersResponse) {}
+
+  rpc SendHeartbeat(HeartbeatRequest) returns (HeartbeatResponse) {}
 }
 
 message RegisterChunkServerRequest {
@@ -24,6 +26,14 @@ message ListChunkServersRequest {
 
 message ListChunkServersResponse {
   repeated string server_address = 1;
+}
+
+message HeartbeatRequest {
+  string server_id = 1;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
 }
 
 // message ListFilesRequest {}

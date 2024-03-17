@@ -5,8 +5,8 @@ use tonic::{transport::Server, Request, Response, Status};
 
 use common::master_server::master_service_server::{MasterService, MasterServiceServer};
 use common::master_server::{
-    ListChunkServersRequest, ListChunkServersResponse, RegisterChunkServerRequest,
-    RegisterChunkServerResponse,
+    HeartbeatRequest, HeartbeatResponse, ListChunkServersRequest, ListChunkServersResponse,
+    RegisterChunkServerRequest, RegisterChunkServerResponse,
 };
 
 #[derive(Debug, Default)]
@@ -20,19 +20,21 @@ impl MasterService for MyMaster {
         &self,
         request: Request<RegisterChunkServerRequest>,
     ) -> Result<Response<RegisterChunkServerResponse>, Status> {
-        let addr = request.remote_addr();
+        let server_address = request
+            .remote_addr()
+            .expect("Method should provide chunk server address");
 
-        println!("Request from: {:?}", addr);
+        println!("Request from: {:?}", server_address);
         let request = request.into_inner();
         let server_id = request.server_id;
-        let server_address = request.server_address;
+
         println!(
             "Registering server: {} with address: {}",
             server_id, server_address
         );
 
         let mut servers = self.chunk_servers.lock().await;
-        servers.insert(server_id, server_address);
+        servers.insert(server_id, server_address.to_string());
 
         Ok(Response::new(RegisterChunkServerResponse { success: true }))
     }
@@ -46,6 +48,18 @@ impl MasterService for MyMaster {
         Ok(Response::new(ListChunkServersResponse {
             server_address: servers,
         }))
+    }
+
+    async fn send_heartbeat(
+        &self,
+        request: Request<HeartbeatRequest>,
+    ) -> Result<Response<HeartbeatResponse>, Status> {
+        println!(
+            "Heartbeat from: {} received",
+            request.into_inner().server_id
+        );
+
+        Ok(Response::new(HeartbeatResponse { success: true }))
     }
 }
 
