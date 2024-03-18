@@ -11,6 +11,11 @@ use common::master_server::{
 
 #[derive(Debug, Default)]
 pub struct MyMaster {
+    // stores filename to chunk handles list mapping
+    chunk_handles: Mutex<HashMap<String, Vec<String>>>,
+    // stores chunk handles locations on chunk servers,
+    locations: Mutex<HashMap<String, Vec<String>>>,
+    // storest chunk server ids to addressess mappings
     chunk_servers: Mutex<HashMap<String, String>>,
 }
 
