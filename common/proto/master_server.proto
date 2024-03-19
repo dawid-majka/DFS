@@ -10,6 +10,8 @@ service MasterService {
   rpc ListChunkServers(ListChunkServersRequest) returns (ListChunkServersResponse) {}
 
   rpc SendHeartbeat(HeartbeatRequest) returns (HeartbeatResponse) {}
+
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse) {}
 }
 
 message RegisterChunkServerRequest {
@@ -36,8 +38,15 @@ message HeartbeatResponse {
   bool success = 1;
 }
 
-// message ListFilesRequest {}
+message UploadFileRequest {
+  string file_name = 1;
+}
 
-// message ListFilesResponse {
-//   repeated dfs.common.FileMetadata files = 1;
-// }
+message UploadFileResponse {
+  ChunkLocation chunk_location = 1; 
+}
+
+message ChunkLocation {
+  uint64 chunk_id = 1;
+  string address = 2;
+}

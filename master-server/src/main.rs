@@ -5,8 +5,9 @@ use tonic::{transport::Server, Request, Response, Status};
 
 use common::master_server::master_service_server::{MasterService, MasterServiceServer};
 use common::master_server::{
-    HeartbeatRequest, HeartbeatResponse, ListChunkServersRequest, ListChunkServersResponse,
-    RegisterChunkServerRequest, RegisterChunkServerResponse,
+    ChunkLocation, HeartbeatRequest, HeartbeatResponse, ListChunkServersRequest,
+    ListChunkServersResponse, RegisterChunkServerRequest, RegisterChunkServerResponse,
+    UploadFileRequest, UploadFileResponse,
 };
 
 #[derive(Debug, Default)]
@@ -65,6 +66,31 @@ impl MasterService for MyMaster {
         );
 
         Ok(Response::new(HeartbeatResponse { success: true }))
+    }
+
+    async fn upload_file(
+        &self,
+        request: Request<UploadFileRequest>,
+    ) -> Result<Response<UploadFileResponse>, Status> {
+        let client_address = request
+            .remote_addr()
+            .expect("Method should provide client address");
+
+        println!("Upload file request from: {:?} received", client_address);
+
+        let chunk_location = Some(ChunkLocation {
+            chunk_id: 1,
+            address: self
+                .chunk_servers
+                .lock()
+                .await
+                .values()
+                .next()
+                .cloned()
+                .unwrap(),
+        });
+
+        Ok(Response::new(UploadFileResponse { chunk_location }))
     }
 }
 
