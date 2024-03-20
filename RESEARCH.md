@@ -9,3 +9,4 @@
 9. Finishing research
 10. Getting ready to start coding
 11. I will start tomorrow
+12. No time for coding but read about tracing crate.
