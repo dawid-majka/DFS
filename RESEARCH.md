@@ -10,3 +10,4 @@
 10. Getting ready to start coding
 11. I will start tomorrow
 12. No time for coding but read about tracing crate.
+13. Also done some reading in spare time.
