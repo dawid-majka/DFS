@@ -1,4 +1,5 @@
 use std::time::Duration;
+use tokio::net::TcpListener;
 
 use rand::Rng;
 
@@ -13,6 +14,8 @@ use common::shared::ChunkData;
 use tokio::time::interval;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
+
+use tokio_stream::wrappers::TcpListenerStream;
 
 #[derive(Debug, Default)]
 struct MyChunk {}
@@ -49,14 +52,17 @@ impl ChunkService for MyChunk {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "127.0.0.1:0".parse()?;
     let chunk = MyChunk::default();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+
+    let addr = listener.local_addr().unwrap();
 
     let server = Server::builder()
         .add_service(ChunkServiceServer::new(chunk))
-        .serve(addr);
+        .serve_with_incoming(TcpListenerStream::new(listener));
 
-    println!("Chunk server listening on {}", addr);
+    println!("Chunk server listening on {}", &addr);
 
     let mut client = MasterServiceClient::connect("http://[::1]:50051").await?;
 
@@ -74,23 +80,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut interval = interval(Duration::from_secs(5));
 
-    tokio::spawn(async move {
-        loop {
-            interval.tick().await;
+    // tokio::spawn(async move {
+    //     loop {
+    //         interval.tick().await;
 
-            let request = Request::new(HeartbeatRequest {
-                server_id: server_id.clone(),
-            });
+    //         let request = Request::new(HeartbeatRequest {
+    //             server_id: server_id.clone(),
+    //         });
 
-            match client.send_heartbeat(request).await {
-                Ok(response) => println!(
-                    "Heartbeat sent. Response: {}",
-                    response.into_inner().success
-                ),
-                Err(e) => println!("Failed to send heartbeat: {}", e),
-            }
-        }
-    });
+    //         match client.send_heartbeat(request).await {
+    //             Ok(response) => println!(
+    //                 "Heartbeat sent. Response: {}",
+    //                 response.into_inner().success
+    //             ),
+    //             Err(e) => println!("Failed to send heartbeat: {}", e),
+    //         }
+    //     }
+    // });
 
     server.await?;
 
