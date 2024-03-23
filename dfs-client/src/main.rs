@@ -37,7 +37,8 @@ impl Client {
         println!("Uplad file response: {:?}", upload_file_response);
 
         if let Some(chunk_location) = upload_file_response.into_inner().chunk_location {
-            let address = format!("http://{}", chunk_location.address.clone());
+            let address = chunk_location.address.clone();
+            // let address = format!("http://{}", chunk_location.address.clone());
             let chunk_id = chunk_location.chunk_id.to_string();
 
             println!("Connecting to chunk server with address: {:?}", address);

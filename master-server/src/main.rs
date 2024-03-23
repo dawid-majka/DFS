@@ -33,6 +33,7 @@ impl MasterService for MyMaster {
         println!("Request from: {:?}", server_address);
         let request = request.into_inner();
         let server_id = request.server_id;
+        let server_address = request.server_address;
 
         println!(
             "Registering server: {} with address: {}",
