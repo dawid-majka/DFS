@@ -5,9 +5,9 @@ use tonic::{transport::Server, Request, Response, Status};
 
 use common::master_server::master_service_server::{MasterService, MasterServiceServer};
 use common::master_server::{
-    ChunkLocation, HeartbeatRequest, HeartbeatResponse, ListChunkServersRequest,
-    ListChunkServersResponse, RegisterChunkServerRequest, RegisterChunkServerResponse,
-    UploadFileRequest, UploadFileResponse,
+    ChunkLocation, ChunkMetadata, DownloadFileRequest, DownloadFileResponse, HeartbeatRequest,
+    HeartbeatResponse, ListChunkServersRequest, ListChunkServersResponse,
+    RegisterChunkServerRequest, RegisterChunkServerResponse, UploadFileRequest, UploadFileResponse,
 };
 
 #[derive(Debug, Default)]
@@ -79,8 +79,9 @@ impl MasterService for MyMaster {
 
         println!("Upload file request from: {:?} received", client_address);
 
-        let chunk_location = Some(ChunkLocation {
-            chunk_id: 1,
+        let request = request.into_inner();
+
+        let chunk_location = ChunkLocation {
             address: self
                 .chunk_servers
                 .lock()
@@ -89,9 +90,55 @@ impl MasterService for MyMaster {
                 .next()
                 .cloned()
                 .unwrap(),
+        };
+
+        let chunk_locations = vec![chunk_location];
+
+        let response = Response::new(UploadFileResponse {
+            chunk_id: request.chunk_id.parse().expect("Should parse chunk_id"),
+            chunk_locations,
         });
 
-        Ok(Response::new(UploadFileResponse { chunk_location }))
+        Ok(response)
+    }
+
+    async fn download_file(
+        &self,
+        request: Request<DownloadFileRequest>,
+    ) -> Result<Response<DownloadFileResponse>, Status> {
+        let client_address = request
+            .remote_addr()
+            .expect("Method should provide client address");
+
+        println!("Download file request from: {:?} received", client_address);
+
+        let file_name = request.into_inner().file_name;
+
+        // TODO: Get from map
+
+        let address = self
+            .chunk_servers
+            .lock()
+            .await
+            .values()
+            .next()
+            .cloned()
+            .unwrap();
+
+        let location = ChunkLocation { address };
+
+        let locations = vec![location];
+
+        let chunk_data = ChunkMetadata {
+            chunk_id: 1,
+            locations,
+        };
+
+        let chunks = vec![chunk_data];
+
+        let response = Response::new(DownloadFileResponse { chunks });
+
+        Ok(response)
     }
 }
 

@@ -1,11 +1,12 @@
 use std::fs::File;
 use std::io::Read;
 
+use bytes::{Bytes, BytesMut};
 use common::chunk_server::chunk_service_client::ChunkServiceClient;
-use common::chunk_server::StoreChunkRequest;
+use common::chunk_server::{RetrieveChunkRequest, StoreChunkRequest};
 
 use common::master_server::master_service_client::MasterServiceClient;
-use common::master_server::UploadFileRequest;
+use common::master_server::{DownloadFileRequest, UploadFileRequest};
 use common::shared::ChunkData;
 use tonic::Request;
 
@@ -20,51 +21,111 @@ impl Client {
         }
     }
 
-    pub async fn upload_file(&self, filename: &str, file: Vec<u8>) {
+    pub async fn upload_file(
+        &self,
+        file_name: &str,
+        data: Bytes,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // TODO: Config
+        let chunk_size = 64 * 1024 * 1024;
+
+        let chunks = split_into_chunks(chunk_size, data);
+
         let mut master_client = MasterServiceClient::connect(self.master_address.clone())
             .await
             .expect("Client should connect to master server");
 
-        let request = Request::new(UploadFileRequest {
-            file_name: filename.to_string(),
+        for (id, chunk) in chunks.iter().enumerate() {
+            let request = Request::new(UploadFileRequest {
+                file_name: file_name.to_string(),
+                chunk_id: id.to_string(),
+            });
+
+            let upload_file_response = master_client
+                .upload_file(request)
+                .await
+                .expect("Master server should return response with chunk location");
+
+            println!("Uplad file response: {:?}", upload_file_response);
+
+            let response = upload_file_response.into_inner();
+
+            for chunk_location in response.chunk_locations {
+                let address = chunk_location.address.clone();
+                // let address = format!("http://{}", chunk_location.address.clone());
+                let chunk_id = response.chunk_id.to_string();
+
+                println!("Connecting to chunk server with address: {:?}", address);
+
+                let mut chunk_client = ChunkServiceClient::connect(address)
+                    .await
+                    .expect("Client should connect to chunk server");
+
+                let request = Request::new(StoreChunkRequest {
+                    chunk: Some(ChunkData {
+                        chunk_id,
+                        data: chunk.to_vec(),
+                    }),
+                });
+
+                let write_chunk_response = chunk_client
+                    .store_chunk(request)
+                    .await
+                    .expect("Chunk server should return response with status");
+
+                println!("Write chunk response: {:?}", write_chunk_response);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_file(&self, file_name: &str) -> Result<Bytes, Box<dyn std::error::Error>> {
+        let mut master_client = MasterServiceClient::connect(self.master_address.clone())
+            .await
+            .expect("Client should connect to master server");
+
+        let download_file_request = Request::new(DownloadFileRequest {
+            file_name: file_name.to_string(),
         });
 
-        let upload_file_response = master_client
-            .upload_file(request)
+        let download_file_response = master_client
+            .download_file(download_file_request)
             .await
-            .expect("Master server should return response with chunk locations");
+            .expect("Master server should return data with chunks locations");
 
-        println!("Uplad file response: {:?}", upload_file_response);
+        let chunks = download_file_response.into_inner().chunks;
 
-        if let Some(chunk_location) = upload_file_response.into_inner().chunk_location {
-            let address = chunk_location.address.clone();
-            // let address = format!("http://{}", chunk_location.address.clone());
-            let chunk_id = chunk_location.chunk_id.to_string();
+        let mut file_data = BytesMut::new();
 
-            println!("Connecting to chunk server with address: {:?}", address);
+        for chunk_data in chunks {
+            let address = chunk_data.chunk_id.to_string();
 
             let mut chunk_client = ChunkServiceClient::connect(address)
                 .await
                 .expect("Client should connect to chunk server");
 
-            let request = Request::new(StoreChunkRequest {
-                chunk: Some(ChunkData {
-                    chunk_id,
-                    data: file,
-                }),
+            let request = Request::new(RetrieveChunkRequest {
+                chunk_id: chunk_data.chunk_id.to_string(),
             });
 
-            let write_chunk_response = chunk_client
-                .store_chunk(request)
+            let response = chunk_client
+                .retrieve_chunk(request)
                 .await
-                .expect("Chunk server should return response with status");
+                .expect("Chunk server should return chunk data");
 
-            println!("Write chunk response: {:?}", write_chunk_response);
+            let chunk_data = response.into_inner().chunk.unwrap().data;
+
+            file_data.extend_from_slice(&chunk_data);
         }
+
+        let file_data = file_data.freeze();
+
+        Ok(file_data)
     }
 
-    pub async fn get_file(&self, filename: &str) -> Vec<u8> {
-        todo!();
+    pub async fn delete_file(&self, file_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        todo!()
     }
 }
 
@@ -72,18 +133,20 @@ impl Client {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new("http://[::1]:50051");
 
-    let filename = "README.md";
-    let mut file = File::open(filename).expect("File should be opened.");
+    let file_name = "README.md";
+
+    let mut file = File::open(file_name).expect("File should be opened.");
     let mut buffer = Vec::new();
 
     file.read_to_end(&mut buffer)?;
-
     println!("{:?}", buffer);
 
-    client.upload_file(filename, buffer).await;
+    let data = Bytes::from(buffer);
+
+    client.upload_file(file_name, data).await;
 
     // TODO: read file
-    let retrieved_file = client.get_file(filename).await;
+    let retrieved_file = client.get_file(file_name).await;
 
     println!("{:?}", retrieved_file);
 
@@ -96,4 +159,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // println!("list_chunk_servers response={:?}", response);
 
     Ok(())
+}
+
+fn split_into_chunks(chunk_size: usize, data: Bytes) -> Vec<Bytes> {
+    data.chunks(chunk_size)
+        .map(|chunk| Bytes::copy_from_slice(chunk))
+        .collect()
 }
