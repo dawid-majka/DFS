@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use config::get_configuration;
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 
@@ -9,6 +10,8 @@ use common::master_server::{
     HeartbeatResponse, ListChunkServersRequest, ListChunkServersResponse,
     RegisterChunkServerRequest, RegisterChunkServerResponse, UploadFileRequest, UploadFileResponse,
 };
+
+mod config;
 
 #[derive(Debug, Default)]
 pub struct MyMaster {
@@ -144,7 +147,9 @@ impl MasterService for MyMaster {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:50051".parse()?;
+    let configuration = get_configuration().expect("Failed to read conifguration");
+
+    let addr = format!("{}:{}", configuration.host, configuration.port).parse()?;
     let master = MyMaster::default();
 
     Server::builder()
