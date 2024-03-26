@@ -10,6 +10,10 @@ use common::master_server::{DownloadFileRequest, UploadFileRequest};
 use common::shared::ChunkData;
 use tonic::Request;
 
+use crate::config::get_configuration;
+
+mod config;
+
 struct Client {
     master_address: String,
 }
@@ -131,7 +135,10 @@ impl Client {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new("http://[::1]:50051");
+    let config = get_configuration().expect("Failed to read configuration");
+    let address = format!("http://{}:{}", config.master_host, config.master_port);
+
+    let client = Client::new(&address);
 
     let file_name = "README.md";
 
