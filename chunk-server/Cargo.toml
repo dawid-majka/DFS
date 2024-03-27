@@ -13,10 +13,10 @@ prost = "0.12.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8.5"
-common = { path = "../common" }
 tokio-stream = { version = "0.1.5", features = ["net"] }
+config = "0.14.0"
 
-# dfs = { path = "../proto", version = "0.1.0" }
+common = { path = "../common" }
 
 [build-dependencies]
 tonic-build = "0.11.0"

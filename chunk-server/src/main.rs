@@ -17,6 +17,10 @@ use tonic::{Request, Response, Status};
 
 use tokio_stream::wrappers::TcpListenerStream;
 
+use config::get_configuration;
+
+mod config;
+
 #[derive(Debug, Default)]
 struct MyChunk {}
 
@@ -52,6 +56,13 @@ impl ChunkService for MyChunk {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let configuration = get_configuration().expect("Failed to read conifguration");
+
+    let master_addr = format!(
+        "http://{}:{}",
+        configuration.master_host, configuration.master_port
+    );
+
     let chunk = MyChunk::default();
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -64,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Chunk server listening on {}", &addr);
 
-    let mut client = MasterServiceClient::connect("http://[::1]:50051").await?;
+    let mut client = MasterServiceClient::connect(master_addr).await?;
 
     let server_id = format!("server_{}", rand::thread_rng().gen::<u32>());
     let server_address = format!("http://{}", addr);
