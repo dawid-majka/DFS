@@ -3,7 +3,7 @@ syntax = "proto3";
 package dfs.shared;
 
 message ChunkData {
-  string chunk_id = 1;
+  string chunk_handle = 1;
   bytes data = 2;
 }
 
@@ -12,3 +12,5 @@ message FileMetadata {
   int64 size = 2;
   repeated string chunk_ids = 3;
 }
+
+message EmptyReply {}

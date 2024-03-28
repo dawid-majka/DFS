@@ -4,7 +4,8 @@ import "shared.proto";
 
 package dfs.chunk_server;
 
-service ChunkService {
+service DataService {
+  //TODO: Update
   rpc StoreChunk(StoreChunkRequest) returns (StoreChunkResponse) {}
 
   rpc RetrieveChunk(RetrieveChunkRequest) returns (RetrieveChunkResponse) {}
@@ -19,9 +20,38 @@ message StoreChunkResponse {
 }
 
 message RetrieveChunkRequest {
-  string chunk_id = 1;
+  string chunk_handle = 1;
 }
 
 message RetrieveChunkResponse {
   shared.ChunkData chunk = 1;
 }
+
+service MetadataService {
+
+  //TODO: Leasing
+  rpc GrantLease(GrantLeaseRequest) returns (GrantLeaseResponse);
+
+  // Replication and Rebalancing
+  //(only chunks acquisition, deletion would be part of garbage collection in heatbeat)
+  rpc AcquireChunks(AcquireChunksRequest) returns (shared.EmptyReply);
+}
+
+message GrantLeaseRequest {
+  string chunk_handle = 1;
+  //TODO: Add expiration
+}
+
+message GrantLeaseResponse {
+  // Nothing for now
+}
+
+message AcquireChunksRequest {
+  repeated ChunkData chunks_to_acquire = 1;
+}
+
+message ChunkData {
+  string chunk_handle = 1;
+  string address = 2;
+}
+
