@@ -3,7 +3,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &[
             "proto/master_server.proto",
             "proto/chunk_server.proto",
-            "proto/client.proto",
             "proto/shared.proto",
         ],
         &["proto"],

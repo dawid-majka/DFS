@@ -49,8 +49,8 @@ service ChunkService {
 
 message HeartbeatRequest {
   string server_address = 1;
-  uint64 storage_capacity = 2;
-  uint64 used_storage = 3;
+  uint64 used = 2;
+  uint64 available = 3;
   repeated string chunk_handles = 4;
 }
 
