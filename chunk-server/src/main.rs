@@ -1,9 +1,11 @@
 use common::master_server::HeartbeatRequest;
-use std::path::PathBuf;
+
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::vec;
+use std::{env, fs};
 use tokio::net::TcpListener;
 
 use common::chunk_server::data_service_server::{DataService, DataServiceServer};
@@ -36,42 +38,98 @@ struct StorageData {
 }
 
 impl StorageData {
-    fn get_storage_data() -> Self {
-        // TODO: Get storage data using Command df:
+    fn new(data_path: &str) -> Self {
+        // Create dir if missing
 
-        let path = "/";
+        // TODO: Check if folder exists
 
-        let disc_usage = Command::new("df")
-            .arg("-h")
-            .arg(path)
-            .output()
-            .expect("Failed to execute df command");
+        let path: Vec<&str> = data_path.split('/').collect();
 
-        println!("disc_usage: {:?}", disc_usage);
+        let home = env::var_os("HOME").unwrap();
+        let mut full_path = PathBuf::from(home);
 
-        let directory = "/files";
+        for part in path {
+            full_path.push(part);
+        }
 
-        let files = Command::new("find")
-            .arg(directory)
-            .arg("-type")
-            .arg("f")
-            .output()
-            .expect("Failed to execute find command");
+        println!("Creating directory: {:?}", full_path);
 
-        println!("disc_usage: {:?}", files);
+        match fs::create_dir_all(&full_path) {
+            Ok(_) => println!("Successfully created directory: {:?}", full_path),
+            Err(e) => println!(
+                "Failed to create directory: {:?}, because: {}",
+                full_path, e
+            ),
+        }
 
-        let used = 0;
-        let available = 0;
-        let data_path = PathBuf::from(directory);
-        let chunk_handles = vec![];
+        // Get disc_usage
+        let (used, available) = get_disc_usage();
+
+        // Get stored chunks
+        let chunk_handles = get_stored_chunk_handles(full_path.to_str().unwrap());
 
         StorageData {
             used,
             available,
-            data_path,
+            data_path: PathBuf::from_str(data_path).expect("data_path should be created"),
             chunk_handles,
         }
     }
+
+fn get_disc_usage() -> (u64, u64) {
+    let disc_usage = Command::new("df")
+        .arg("-k")
+        .arg("--output=used,avail")
+        .arg("/")
+        .output()
+        .expect("Failed to execute df command");
+
+    println!("disc_usage: {:?}", disc_usage);
+
+    let output_str = String::from_utf8_lossy(&disc_usage.stdout);
+
+    let data: Vec<&str> = output_str
+        .split_once("\n")
+        .unwrap()
+        .1
+        .split_ascii_whitespace()
+        .collect();
+
+    println!("{:?}", data);
+
+    let used = data.first().unwrap().parse().unwrap();
+    let available = data.get(1).unwrap().parse().unwrap();
+
+    println!("disc_usage: used:{:?}, available: {:?}", used, available);
+
+    (used, available)
+}
+
+fn get_stored_chunk_handles(data_path: &str) -> Vec<String> {
+    let files = Command::new("find")
+        .arg(data_path)
+        .arg("-type")
+        .arg("f")
+        .output()
+        .expect("Failed to execute find command");
+
+    println!("stored files: {:?}", files);
+
+    let files = String::from_utf8(files.stdout).expect("Failed to convert output to string");
+
+    let filenames: Vec<String> = files
+        .lines()
+        .filter_map(|line| {
+            Path::new(line)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.to_string())
+        })
+        .collect();
+
+    println!("stored file names: {:?}", filenames);
+
+    filenames
 }
 
 #[derive(Debug, Default)]
@@ -82,7 +140,7 @@ struct ChunkServer {
 
 impl ChunkServer {
     fn new(address: String) -> Self {
-        let storage_data = StorageData::get_storage_data();
+        let storage_data = StorageData::new("/chunk-server/data");
 
         ChunkServer {
             address,
