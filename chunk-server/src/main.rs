@@ -1,4 +1,7 @@
 use common::master_server::HeartbeatRequest;
+use tracing::{error, info};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use uuid::Uuid;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -38,6 +41,7 @@ struct StorageData {
 }
 
 impl StorageData {
+    #[tracing::instrument]
     fn new(data_path: &str) -> Self {
         // Create dir if missing
 
@@ -52,11 +56,11 @@ impl StorageData {
             full_path.push(part);
         }
 
-        println!("Creating directory: {:?}", full_path);
+        info!("Creating directory: {:?}", full_path);
 
         match fs::create_dir_all(&full_path) {
-            Ok(_) => println!("Successfully created directory: {:?}", full_path),
-            Err(e) => println!(
+            Ok(_) => info!("Successfully created directory: {:?}", full_path),
+            Err(e) => error!(
                 "Failed to create directory: {:?}, because: {}",
                 full_path, e
             ),
@@ -74,7 +78,7 @@ impl StorageData {
             data_path: PathBuf::from_str(data_path).expect("data_path should be created"),
             chunk_handles,
         }
-    }
+}
 
 fn get_disc_usage() -> (u64, u64) {
     let disc_usage = Command::new("df")
@@ -84,7 +88,7 @@ fn get_disc_usage() -> (u64, u64) {
         .output()
         .expect("Failed to execute df command");
 
-    println!("disc_usage: {:?}", disc_usage);
+    info!("disc_usage: {:?}", disc_usage);
 
     let output_str = String::from_utf8_lossy(&disc_usage.stdout);
 
@@ -95,12 +99,12 @@ fn get_disc_usage() -> (u64, u64) {
         .split_ascii_whitespace()
         .collect();
 
-    println!("{:?}", data);
+    info!("{:?}", data);
 
     let used = data.first().unwrap().parse().unwrap();
     let available = data.get(1).unwrap().parse().unwrap();
 
-    println!("disc_usage: used:{:?}, available: {:?}", used, available);
+    info!("disc_usage: used:{:?}, available: {:?}", used, available);
 
     (used, available)
 }
@@ -113,7 +117,7 @@ fn get_stored_chunk_handles(data_path: &str) -> Vec<String> {
         .output()
         .expect("Failed to execute find command");
 
-    println!("stored files: {:?}", files);
+    info!("stored files: {:?}", files);
 
     let files = String::from_utf8(files.stdout).expect("Failed to convert output to string");
 
@@ -127,7 +131,7 @@ fn get_stored_chunk_handles(data_path: &str) -> Vec<String> {
         })
         .collect();
 
-    println!("stored file names: {:?}", filenames);
+    info!("stored file names: {:?}", filenames);
 
     filenames
 }
@@ -139,6 +143,7 @@ struct ChunkServer {
 }
 
 impl ChunkServer {
+    #[tracing::instrument]
     fn new(address: String) -> Self {
         let storage_data = StorageData::new("/chunk-server/data");
 
@@ -151,22 +156,24 @@ impl ChunkServer {
 
 #[tonic::async_trait]
 impl DataService for ChunkServer {
+    #[tracing::instrument(skip(self))]
     async fn store_chunk(
         &self,
         request: Request<StoreChunkRequest>,
     ) -> Result<Response<StoreChunkResponse>, Status> {
-        println!("Store chunk request: {:?}", request);
+        info!("Store chunk request: {:?}", request);
 
         let response = StoreChunkResponse { success: true };
 
         Ok(Response::new(response))
     }
 
+    #[tracing::instrument(skip(self))]
     async fn retrieve_chunk(
         &self,
         request: Request<RetrieveChunkRequest>,
     ) -> Result<Response<RetrieveChunkResponse>, Status> {
-        println!("Retrieve chunk request: {:?}", request);
+        info!("Retrieve chunk request: {:?}", request);
 
         let chunk = Some(ChunkData {
             chunk_handle: "1".to_string(),
@@ -181,6 +188,7 @@ impl DataService for ChunkServer {
 
 #[tonic::async_trait]
 impl MetadataService for ChunkServer {
+    #[tracing::instrument(skip(self))]
     async fn grant_lease(
         &self,
         request: Request<GrantLeaseRequest>,
@@ -188,6 +196,7 @@ impl MetadataService for ChunkServer {
         todo!()
     }
 
+    #[tracing::instrument(skip(self))]
     async fn acquire_chunks(
         &self,
         request: Request<AcquireChunksRequest>,
@@ -198,6 +207,9 @@ impl MetadataService for ChunkServer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    FmtSubscriber::builder().with_env_filter(filter).init();
+
     let configuration = get_configuration().expect("Failed to read conifguration");
 
     // TODO: Get storage data
@@ -215,14 +227,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let chunk = Arc::new(chunk);
 
     let server = Server::builder()
+        .trace_fn(|_| {
+            let request_id = Uuid::new_v4();
+            tracing::info_span!("Request span", %request_id)
+        })
         .add_service(DataServiceServer::from_arc(chunk.clone()))
         .add_service(MetadataServiceServer::from_arc(chunk.clone()))
         .serve_with_incoming(TcpListenerStream::new(listener));
 
-    println!("Chunk server listening on {}", &addr);
+    info!("Chunk server listening on {}", &addr);
 
     //TODO: try_connect
-    let mut client = ChunkServiceClient::connect(master_addr).await?;
+    let mut client = ChunkServiceClient::connect(master_addr.clone()).await?;
 
     let server_address = format!("http://{}", addr);
 
@@ -232,6 +248,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         loop {
             interval.tick().await;
+            info!(
+                "Sending heartbeat message to master-server on: {}",
+                &master_addr
+            );
 
             let used = chunk.storage_data.used;
             let available = chunk.storage_data.available;
@@ -246,11 +266,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
 
             match client.heartbeat(request).await {
-                Ok(response) => println!(
+                Ok(response) => info!(
                     "Heartbeat sent. Resonse.to_delete len: {}",
                     response.into_inner().to_delete.len()
                 ),
-                Err(e) => println!("Failed to send heartbeat: {}", e),
+                Err(e) => error!("Failed to send heartbeat: {}", e),
             }
         }
     });
