@@ -11,6 +11,9 @@ use common::master_server::{
     ChunkLocation, ChunkMetadata, DownloadFileRequest, DownloadFileResponse, HeartbeatRequest,
     HeartbeatResponse, UploadFileRequest, UploadFileResponse,
 };
+use tracing::info;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use uuid::Uuid;
 
 mod config;
 
@@ -26,6 +29,7 @@ pub struct MasterServer {
 
 #[tonic::async_trait]
 impl ClientService for MasterServer {
+    #[tracing::instrument(skip(self))]
     async fn upload_file(
         &self,
         request: Request<UploadFileRequest>,
@@ -34,7 +38,7 @@ impl ClientService for MasterServer {
             .remote_addr()
             .expect("Method should provide client address");
 
-        println!("Upload file request from: {:?} received", client_address);
+        info!("Upload file request from: {:?} received", client_address);
 
         let request = request.into_inner();
 
@@ -59,6 +63,7 @@ impl ClientService for MasterServer {
         Ok(response)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn download_file(
         &self,
         request: Request<DownloadFileRequest>,
@@ -67,7 +72,7 @@ impl ClientService for MasterServer {
             .remote_addr()
             .expect("Method should provide client address");
 
-        println!("Download file request from: {:?} received", client_address);
+        info!("Download file request from: {:?} received", client_address);
 
         let file_name = request.into_inner().file_name;
 
@@ -101,11 +106,12 @@ impl ClientService for MasterServer {
 
 #[tonic::async_trait]
 impl ChunkService for MasterServer {
+    #[tracing::instrument(skip(self))]
     async fn heartbeat(
         &self,
         request: Request<HeartbeatRequest>,
     ) -> Result<Response<HeartbeatResponse>, Status> {
-        println!(
+        info!(
             "Heartbeat from: {} received",
             request.into_inner().server_address
         );
@@ -118,14 +124,22 @@ impl ChunkService for MasterServer {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    FmtSubscriber::builder().with_env_filter(filter).init();
+
     let configuration = get_configuration().expect("Failed to read conifguration");
 
     let addr = format!("{}:{}", configuration.host, configuration.port).parse()?;
     let master = MasterServer::default();
-
     let master = Arc::new(master);
 
+    tracing::info!(message = "Starting server.", %addr);
+
     Server::builder()
+        .trace_fn(|_| {
+            let request_id = Uuid::new_v4();
+            tracing::info_span!("Request span", %request_id)
+        })
         .add_service(ChunkServiceServer::from_arc(master.clone()))
         .add_service(ClientServiceServer::from_arc(master))
         .serve(addr)
