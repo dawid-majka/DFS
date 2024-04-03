@@ -4,7 +4,7 @@ import "shared.proto";
 
 package dfs.chunk_server;
 
-service DataService {
+service ClientService {
   //TODO: Update
   rpc StoreChunk(StoreChunkRequest) returns (StoreChunkResponse) {}
 
@@ -27,7 +27,7 @@ message RetrieveChunkResponse {
   shared.ChunkData chunk = 1;
 }
 
-service MetadataService {
+service MasterService {
 
   //TODO: Leasing
   rpc GrantLease(GrantLeaseRequest) returns (GrantLeaseResponse);
