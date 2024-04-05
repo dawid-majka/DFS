@@ -13,7 +13,7 @@ use crate::medatada::Metadata;
 mod chunk_service;
 mod client_service;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct MasterServer {
     metadata: Arc<Metadata>,
 }
