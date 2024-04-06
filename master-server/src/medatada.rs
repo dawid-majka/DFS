@@ -1,4 +1,9 @@
-use std::{collections::HashMap, sync::Mutex, vec};
+use std::{
+    collections::HashMap,
+    io::{Error, ErrorKind},
+    sync::Mutex,
+    vec,
+};
 
 #[derive(Debug)]
 pub struct Metadata {
@@ -36,6 +41,28 @@ enum Node {
     },
 }
 
+impl Node {
+    fn mkdir(&mut self, name: &str) -> Result<&mut Node, Error> {
+        match self {
+            Node::Directory { name, nodes } => {
+                let node = nodes.entry(name.to_string()).or_insert(Node::Directory {
+                    name: name.to_string(),
+                    nodes: HashMap::new(),
+                });
+
+                Ok(node)
+            }
+            Node::File { name } => {
+                // TODO: Error(Its not directory)
+                Err(Error::new(
+                    ErrorKind::Other,
+                    "Path invalid. File not a directory.",
+                ))
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 struct Namespace {
     root: Node,
@@ -51,11 +78,33 @@ impl Namespace {
         }
     }
 
-    pub fn mkdir(&mut self, path: &str) {}
+    // TODO: Only from root ? Or should i check if root
+    pub fn mkdir(&mut self, path: &str) {
+        let mut node = &mut self.root;
+        for part in path.split('/') {
+            // Add validation
+            if part.is_empty() {
+                // Error(Invalid dir name)
+            }
+            node = node.mkdir(part).unwrap();
+        }
+    }
 
     pub fn ls(&self, path: &str) -> Vec<String> {
         vec![]
     }
 
     pub fn create_file(&mut self, path: &str, filename: &str) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mkdir_should_create_dir() {
+        let mut namespace = Namespace::new();
+
+        namespace.mkdir("/path/to/new/directory");
+    }
 }
