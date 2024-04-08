@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-// import "shared.proto";
+import "shared.proto";
 
 package dfs.master_server;
 
@@ -10,6 +10,10 @@ service ClientService {
   rpc UploadFile(UploadFileRequest) returns (UploadFileResponse) {}
 
   rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse) {}
+
+  rpc Mkdir(MkdirRequest) returns (shared.EmptyReply) {}
+  
+  rpc Ls(LsRequest) returns (LsResponse) {}
 }
 
 
@@ -38,6 +42,18 @@ message ChunkMetadata {
 
 message ChunkLocation {
   string address = 2;
+}
+
+message MkdirRequest {
+  string path = 1;
+}
+
+message LsRequest {
+  string path = 1;
+}
+
+message LsResponse {
+  repeated string content = 1;
 }
 
 

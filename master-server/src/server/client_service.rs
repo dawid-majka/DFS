@@ -1,6 +1,10 @@
-use common::master_server::{
-    client_service_server::ClientService, ChunkLocation, ChunkMetadata, DownloadFileRequest,
-    DownloadFileResponse, UploadFileRequest, UploadFileResponse,
+use common::{
+    master_server::{
+        client_service_server::ClientService, ChunkLocation, ChunkMetadata, DownloadFileRequest,
+        DownloadFileResponse, LsRequest, LsResponse, MkdirRequest, UploadFileRequest,
+        UploadFileResponse,
+    },
+    shared::EmptyReply,
 };
 use tonic::{Request, Response, Status};
 use tracing::info;
@@ -85,6 +89,45 @@ impl ClientService for MasterServer {
         let chunks = vec![chunk_data];
 
         let response = Response::new(DownloadFileResponse { chunks });
+
+        Ok(response)
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn mkdir(&self, request: Request<MkdirRequest>) -> Result<Response<EmptyReply>, Status> {
+        let client_address = request
+            .remote_addr()
+            .expect("Method should provide client address");
+
+        info!("Mkdir request from: {:?} received", client_address);
+
+        let path = request.into_inner().path;
+
+        self.metadata.mkdir(&path);
+
+        let response = Response::new(EmptyReply {});
+
+        Ok(response)
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn ls(&self, request: Request<LsRequest>) -> Result<Response<LsResponse>, Status> {
+        let client_address = request
+            .remote_addr()
+            .expect("Method should provide client address");
+
+        info!("Ls request from: {:?} received", client_address);
+
+        let path = request.into_inner().path;
+
+        let content = self
+            .metadata
+            .ls(&path)
+            .into_iter()
+            .map(|elem| elem.to_owned())
+            .collect();
+
+        let response = Response::new(LsResponse { content });
 
         Ok(response)
     }

@@ -28,6 +28,20 @@ impl Metadata {
             locations,
         }
     }
+
+    pub fn mkdir(&self, path: &str) {
+        self.namespace.lock().unwrap().mkdir(path)
+    }
+
+    pub fn ls(&self, path: &str) -> Vec<String> {
+        self.namespace
+            .lock()
+            .unwrap()
+            .ls(path)
+            .into_iter()
+            .map(|elem| elem.to_owned())
+            .collect()
+    }
 }
 
 #[derive(Debug)]
