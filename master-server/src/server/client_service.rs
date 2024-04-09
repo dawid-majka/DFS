@@ -1,8 +1,8 @@
 use common::{
     master_server::{
-        client_service_server::ClientService, ChunkLocation, ChunkMetadata, DownloadFileRequest,
-        DownloadFileResponse, LsRequest, LsResponse, MkdirRequest, UploadFileRequest,
-        UploadFileResponse,
+        client_service_server::ClientService, AllocateChunkRequest, AllocateChunkResponse,
+        ChunkMetadata, CloseFileRequest, CreateFileRequest, DeleteFileRequest, LsRequest,
+        LsResponse, MkdirRequest, OpenFileRequest, OpenFileResponse,
     },
     shared::EmptyReply,
 };
@@ -13,82 +13,54 @@ use super::MasterServer;
 
 #[tonic::async_trait]
 impl ClientService for MasterServer {
-    #[tracing::instrument(skip(self))]
-    async fn upload_file(
+    async fn open_file(
         &self,
-        request: Request<UploadFileRequest>,
-    ) -> Result<Response<UploadFileResponse>, Status> {
-        let client_address = request
-            .remote_addr()
-            .expect("Method should provide client address");
-
-        let chunk_handle = "123";
-
-        info!("Upload file request from: {:?} received", client_address);
-
-        let request = request.into_inner();
-
-        let chunk_location = ChunkLocation {
-            address: self
-                .metadata
-                .locations
-                .lock()
-                .unwrap()
-                .get(chunk_handle)
-                .unwrap()
-                .first()
-                .unwrap()
-                .to_string(),
-        };
-
-        let chunk_locations = vec![chunk_location];
-
-        let response = Response::new(UploadFileResponse {
-            chunk_id: request.chunk_id.parse().expect("Should parse chunk_id"),
-            chunk_locations,
+        request: Request<OpenFileRequest>,
+    ) -> Result<Response<OpenFileResponse>, Status> {
+        let response = Response::new(OpenFileResponse {
+            chunks_metadata: Vec::new(),
         });
 
         Ok(response)
     }
 
-    #[tracing::instrument(skip(self))]
-    async fn download_file(
+    async fn close_file(
         &self,
-        request: Request<DownloadFileRequest>,
-    ) -> Result<Response<DownloadFileResponse>, Status> {
-        let client_address = request
-            .remote_addr()
-            .expect("Method should provide client address");
+        request: Request<CloseFileRequest>,
+    ) -> Result<Response<EmptyReply>, Status> {
+        let response = Response::new(EmptyReply {});
 
-        info!("Download file request from: {:?} received", client_address);
+        Ok(response)
+    }
 
-        let file_name = request.into_inner().file_name;
+    async fn create_file(
+        &self,
+        request: Request<CreateFileRequest>,
+    ) -> Result<Response<EmptyReply>, Status> {
+        let response = Response::new(EmptyReply {});
 
-        let chunk_handle = "123";
+        Ok(response)
+    }
 
-        let address = self
-            .metadata
-            .locations
-            .lock()
-            .unwrap()
-            .get(chunk_handle)
-            .unwrap()
-            .first()
-            .unwrap()
-            .to_string();
+    async fn delete_file(
+        &self,
+        request: Request<DeleteFileRequest>,
+    ) -> Result<Response<EmptyReply>, Status> {
+        let response = Response::new(EmptyReply {});
 
-        let location = ChunkLocation { address };
+        Ok(response)
+    }
 
-        let locations = vec![location];
+    async fn allocate_chunk(
+        &self,
+        request: Request<AllocateChunkRequest>,
+    ) -> Result<Response<AllocateChunkResponse>, Status> {
+        let chunk_metadata = Some(ChunkMetadata {
+            chunk_handle: "1234".to_owned(),
+            locations: Vec::new(),
+        });
 
-        let chunk_data = ChunkMetadata {
-            chunk_id: 1,
-            locations,
-        };
-
-        let chunks = vec![chunk_data];
-
-        let response = Response::new(DownloadFileResponse { chunks });
+        let response = Response::new(AllocateChunkResponse { chunk_metadata });
 
         Ok(response)
     }

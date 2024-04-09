@@ -4,12 +4,17 @@ import "shared.proto";
 
 package dfs.master_server;
 
-// TODO: Update
 service ClientService {
 
-  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse) {}
+  rpc OpenFile(OpenFileRequest) returns (OpenFileResponse) {}
 
-  rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse) {}
+  rpc CloseFile(CloseFileRequest) returns (shared.EmptyReply) {}
+
+  rpc CreateFile(CreateFileRequest) returns (shared.EmptyReply) {}
+
+  rpc DeleteFile(DeleteFileRequest) returns (shared.EmptyReply) {}
+
+  rpc AllocateChunk(AllocateChunkRequest) returns (AllocateChunkResponse) {}
 
   rpc Mkdir(MkdirRequest) returns (shared.EmptyReply) {}
   
@@ -17,27 +22,42 @@ service ClientService {
 }
 
 
-message UploadFileRequest {
-  string file_name = 1;
-  string chunk_id = 2;
+message OpenFileRequest {
+  string file_path = 1;
+  // TODO: change mode to enum
+  string mode = 2;
 }
 
-message UploadFileResponse {
-  uint64 chunk_id = 1;
-  repeated ChunkLocation chunk_locations = 2; 
+// If Mode::Read -> list of chunk_handles with associated chunk servers
+// TODO: Add reading by chunks
+// If Mode::Write -> Empty for now 
+message OpenFileResponse {
+  repeated ChunkMetadata chunks_metadata = 1;
 }
 
-message DownloadFileRequest {
-  string file_name = 1;
+message CloseFileRequest {
+  string file_path = 1;
 }
 
-message DownloadFileResponse {
-  repeated ChunkMetadata chunks = 1;
+message CreateFileRequest {
+  string file_path = 1;
+}
+
+message DeleteFileRequest {
+  string file_path = 1;
+}
+
+message AllocateChunkRequest {
+  string file_path = 1;
+}
+
+message AllocateChunkResponse {
+  ChunkMetadata chunk_metadata = 1;
 }
 
 message ChunkMetadata {
-  uint64 chunk_id = 1;
-  repeated ChunkLocation locations = 2; 
+  string chunk_handle = 1;
+  repeated string locations = 2;  
 }
 
 message ChunkLocation {
@@ -56,7 +76,7 @@ message LsResponse {
   repeated string content = 1;
 }
 
-
+// TODO: Probably change that master pings chunk servers
 service ChunkService {
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse) {}
   // TODO: Move re-replication, rebalancing and leasing to separate requests  
