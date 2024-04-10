@@ -2,30 +2,28 @@ use std::{
     collections::HashMap,
     io::{Error, ErrorKind},
     sync::Mutex,
-    vec,
 };
 
 #[derive(Debug)]
 pub struct Metadata {
-    // TODO: Namespace
     namespace: Mutex<Namespace>,
-    //TODO: Edit log
+    //TODO: Operation log
     // stores filename to chunk handles list mapping
-    chunk_handles: Mutex<HashMap<String, Vec<String>>>,
+    filepath_to_chunk_handles: Mutex<HashMap<String, Vec<String>>>,
     // stores chunk handles locations on chunk servers,
-    pub locations: Mutex<HashMap<String, Vec<String>>>,
+    chunk_handle_to_chunk_servers: Mutex<HashMap<String, Vec<String>>>,
 }
 
 impl Metadata {
     pub fn new() -> Self {
         let namespace = Mutex::new(Namespace::new());
-        let chunk_handles = Mutex::new(HashMap::new());
-        let locations = Mutex::new(HashMap::new());
+        let filepath_to_chunk_handles = Mutex::new(HashMap::new());
+        let chunk_handle_to_chunk_servers = Mutex::new(HashMap::new());
 
         Metadata {
             namespace,
-            chunk_handles,
-            locations,
+            filepath_to_chunk_handles,
+            chunk_handle_to_chunk_servers,
         }
     }
 
@@ -41,6 +39,15 @@ impl Metadata {
             .into_iter()
             .map(|elem| elem.to_owned())
             .collect()
+    }
+
+    pub fn create_file(&self, file_path: String) {
+        self.namespace.lock().unwrap().create_file(&file_path);
+
+        self.filepath_to_chunk_handles
+            .lock()
+            .unwrap()
+            .insert(file_path, Vec::new());
     }
 }
 
@@ -91,6 +98,19 @@ impl Node {
             }
         }
     }
+
+    fn create_file(&mut self, file_name: &str) {
+        match self {
+            Node::Directory { nodes, .. } => {
+                nodes.entry(file_name.to_string()).or_insert(Node::File {
+                    name: file_name.to_string(),
+                });
+            }
+            Node::File { name } => {
+                //TODO: Error
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -105,6 +125,24 @@ impl Namespace {
                 name: "".to_string(),
                 nodes: HashMap::new(),
             },
+        }
+    }
+
+    pub fn create_file(&mut self, file_path: &str) {
+        let mut node = &mut self.root;
+        let file_path = file_path.strip_prefix('/').unwrap();
+        if let Some((path, name)) = file_path.rsplit_once('/') {
+            for part in path.split('/') {
+                // Add validation
+                if part.is_empty() {
+                    // Error(Invalid dir name)
+                }
+
+                // mkdir if not exists else traverse
+                node = node.mkdir(part).unwrap();
+            }
+
+            node.create_file(name);
         }
     }
 
@@ -153,8 +191,6 @@ impl Namespace {
 
         node.ls()
     }
-
-    pub fn create_file(&mut self, path: &str, filename: &str) {}
 }
 
 #[cfg(test)]
@@ -178,5 +214,26 @@ mod tests {
         assert_eq!(new_dir.len(), 1);
         assert_eq!(new_dir[0], "directory");
         assert_eq!(directory_dir.len(), 0);
+    }
+
+    #[test]
+    fn crate_file_should_create_file() {
+        let mut namespace = Namespace::new();
+        namespace.mkdir("/path/to");
+        namespace.create_file("/path/to/new/directory/new_file");
+
+        let path_dir = namespace.ls("/path");
+        let to_dir = namespace.ls("/path/to");
+        let new_dir = namespace.ls("/path/to/new");
+        let directory_dir = namespace.ls("/path/to/new/directory");
+
+        assert_eq!(path_dir.len(), 1);
+        assert_eq!(path_dir[0], "to");
+        assert_eq!(to_dir.len(), 1);
+        assert_eq!(to_dir[0], "new");
+        assert_eq!(new_dir.len(), 1);
+        assert_eq!(new_dir[0], "directory");
+        assert_eq!(directory_dir.len(), 1);
+        assert_eq!(directory_dir[0], "new_file");
     }
 }

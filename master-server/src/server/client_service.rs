@@ -37,6 +37,16 @@ impl ClientService for MasterServer {
         &self,
         request: Request<CreateFileRequest>,
     ) -> Result<Response<EmptyReply>, Status> {
+        let client_address = request
+            .remote_addr()
+            .expect("Method should provide client address");
+
+        info!("Create file request from: {:?} received", client_address);
+
+        let file_path = request.into_inner().file_path;
+
+        self.metadata.create_file(file_path);
+
         let response = Response::new(EmptyReply {});
 
         Ok(response)
