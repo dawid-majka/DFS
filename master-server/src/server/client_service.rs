@@ -56,6 +56,20 @@ impl ClientService for MasterServer {
         &self,
         request: Request<DeleteFileRequest>,
     ) -> Result<Response<EmptyReply>, Status> {
+        // Only marks file to delete and hides it
+        // Final delete is during GC scan (interval set in config)
+        // GC deletes metadata and sends it in to_delete list (heartbeat) to chunk_server
+
+        let client_address = request
+            .remote_addr()
+            .expect("Method should provide client address");
+
+        info!("Delete file request from: {:?} received", client_address);
+
+        let file_path = request.into_inner().file_path;
+
+        self.metadata.delete_file(file_path);
+
         let response = Response::new(EmptyReply {});
 
         Ok(response)

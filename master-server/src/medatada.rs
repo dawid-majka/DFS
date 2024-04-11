@@ -49,6 +49,24 @@ impl Metadata {
             .unwrap()
             .insert(file_path, Vec::new());
     }
+
+    pub fn delete_file(&self, file_path: String) {
+        self.namespace.lock().unwrap().delete_file(&file_path);
+
+        // Should i delete it form filepath_to_chunk_handles already
+        // or during GC ?
+        self.filepath_to_chunk_handles
+            .lock()
+            .unwrap()
+            .remove(&file_path);
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum Status {
+    // Rethink this
+    Active,
+    Deleted,
 }
 
 #[derive(Debug)]
@@ -59,6 +77,7 @@ enum Node {
     },
     File {
         name: String, // Do i need chunks stored here or in separate map<file_path/file_name, chunks>
+        status: Status,
     },
 }
 
@@ -73,7 +92,7 @@ impl Node {
 
                 Ok(node)
             }
-            Node::File { name } => {
+            Node::File { .. } => {
                 // TODO: Error(Its not directory)
                 Err(Error::new(
                     ErrorKind::Other,
@@ -87,12 +106,15 @@ impl Node {
         match self {
             Node::Directory { name, nodes } => nodes
                 .values()
-                .map(|node| match node {
-                    Node::Directory { name, nodes } => name.as_str(),
-                    Node::File { name } => name.as_str(),
+                .filter_map(|node| match node {
+                    Node::Directory { name, nodes } => Some(name.as_str()),
+                    Node::File { name, status } => match status {
+                        Status::Deleted => None,
+                        Status::Active => Some(name.as_str()),
+                    },
                 })
                 .collect(),
-            Node::File { name } => {
+            Node::File { .. } => {
                 //TODO: Error
                 Vec::new()
             }
@@ -104,10 +126,34 @@ impl Node {
             Node::Directory { nodes, .. } => {
                 nodes.entry(file_name.to_string()).or_insert(Node::File {
                     name: file_name.to_string(),
+                    status: Status::Active,
                 });
             }
-            Node::File { name } => {
+            Node::File { .. } => {
                 //TODO: Error
+            }
+        }
+    }
+
+    fn mark_as_deleted(&mut self) {
+        match self {
+            Node::Directory { nodes, .. } => {
+                // Error for now, what about deleting dirs?
+                todo!()
+            }
+            Node::File { status, .. } => *status = Status::Deleted,
+        }
+    }
+
+    fn get_node(&mut self, name: &str) -> &mut Node {
+        match self {
+            Node::Directory { nodes, .. } => {
+                // Error handling
+                nodes.get_mut(name).unwrap()
+            }
+            Node::File { .. } => {
+                // Error:
+                todo!()
             }
         }
     }
@@ -146,6 +192,21 @@ impl Namespace {
         }
     }
 
+    pub fn delete_file(&mut self, file_path: &str) {
+        let mut node = &mut self.root;
+        let file_path = file_path.strip_prefix('/').unwrap();
+
+        for part in file_path.split('/') {
+            // Add validation
+            if part.is_empty() {
+                // Error(Invalid dir name)
+            }
+
+            node = node.get_node(part);
+        }
+        node.mark_as_deleted();
+    }
+
     // Path should always start with root
     pub fn mkdir(&mut self, path: &str) {
         let mut node = &mut self.root;
@@ -182,7 +243,7 @@ impl Namespace {
                         }
                     }
                 }
-                Node::File { name } => {
+                Node::File { .. } => {
                     // Error
                     todo!()
                 }
@@ -235,5 +296,30 @@ mod tests {
         assert_eq!(new_dir[0], "directory");
         assert_eq!(directory_dir.len(), 1);
         assert_eq!(directory_dir[0], "new_file");
+    }
+
+    #[test]
+    fn delete_file_should_mark_file_as_deleted() {
+        let mut namespace = Namespace::new();
+        namespace.create_file("/dir/new_file");
+
+        let path_dir = namespace.ls("/dir");
+
+        assert_eq!(path_dir.len(), 1);
+        assert_eq!(path_dir[0], "new_file");
+
+        namespace.delete_file("/dir/new_file");
+
+        let path_dir = namespace.ls("/dir");
+        assert_eq!(path_dir.len(), 0);
+
+        match namespace.root.get_node("dir").get_node("new_file") {
+            Node::Directory { name, nodes } => {
+                panic!("Should be file not directort");
+            }
+            Node::File { name, status } => {
+                assert_eq!(Status::Deleted, *status)
+            }
+        }
     }
 }
