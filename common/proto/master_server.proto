@@ -56,7 +56,7 @@ message AllocateChunkResponse {
 }
 
 message ChunkMetadata {
-  string chunk_handle = 1;
+  uint64 chunk_handle = 1;
   repeated string locations = 2;  
 }
 

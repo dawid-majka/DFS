@@ -13,6 +13,7 @@ use super::MasterServer;
 
 #[tonic::async_trait]
 impl ClientService for MasterServer {
+    #[tracing::instrument(skip(self))]
     async fn open_file(
         &self,
         request: Request<OpenFileRequest>,
@@ -24,6 +25,7 @@ impl ClientService for MasterServer {
         Ok(response)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn close_file(
         &self,
         request: Request<CloseFileRequest>,
@@ -33,6 +35,7 @@ impl ClientService for MasterServer {
         Ok(response)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn create_file(
         &self,
         request: Request<CreateFileRequest>,
@@ -52,6 +55,7 @@ impl ClientService for MasterServer {
         Ok(response)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn delete_file(
         &self,
         request: Request<DeleteFileRequest>,
@@ -75,14 +79,22 @@ impl ClientService for MasterServer {
         Ok(response)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn allocate_chunk(
         &self,
         request: Request<AllocateChunkRequest>,
     ) -> Result<Response<AllocateChunkResponse>, Status> {
-        let chunk_metadata = Some(ChunkMetadata {
-            chunk_handle: "1234".to_owned(),
-            locations: Vec::new(),
-        });
+        let client_address = request
+            .remote_addr()
+            .expect("Method should provide client address");
+
+        info!("Allocate chunk request from: {:?} received", client_address);
+
+        let file_path = request.into_inner().file_path;
+       
+        let chunk_id = 1;
+
+        let chunk_metadata = Some(self.metadata.allocate_chunk(&file_path, chunk_id));
 
         let response = Response::new(AllocateChunkResponse { chunk_metadata });
 

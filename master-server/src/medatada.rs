@@ -1,17 +1,29 @@
 use std::{
     collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
     io::{Error, ErrorKind},
     sync::Mutex,
 };
+
+use common::master_server::ChunkMetadata;
+
+#[derive(Debug)]
+struct ChunkServerStatus {
+    address: String,
+    used: u64,
+    available: u64,
+}
 
 #[derive(Debug)]
 pub struct Metadata {
     namespace: Mutex<Namespace>,
     //TODO: Operation log
     // stores filename to chunk handles list mapping
-    filepath_to_chunk_handles: Mutex<HashMap<String, Vec<String>>>,
+    filepath_to_chunk_handles: Mutex<HashMap<String, Vec<u64>>>,
     // stores chunk handles locations on chunk servers,
     chunk_handle_to_chunk_servers: Mutex<HashMap<String, Vec<String>>>,
+    // stores adressess of chunk servers
+    chunk_servers: Mutex<HashMap<String, ChunkServerStatus>>,
 }
 
 impl Metadata {
@@ -19,11 +31,13 @@ impl Metadata {
         let namespace = Mutex::new(Namespace::new());
         let filepath_to_chunk_handles = Mutex::new(HashMap::new());
         let chunk_handle_to_chunk_servers = Mutex::new(HashMap::new());
+        let chunk_servers = Mutex::new(HashMap::new());
 
         Metadata {
             namespace,
             filepath_to_chunk_handles,
             chunk_handle_to_chunk_servers,
+            chunk_servers,
         }
     }
 
@@ -59,6 +73,66 @@ impl Metadata {
             .lock()
             .unwrap()
             .remove(&file_path);
+    }
+
+    pub fn allocate_chunk(&self, file_path: &str, chunk_id: u64) -> ChunkMetadata {
+        // Generate chunk handles
+        let chunk_handle = self.generate_chunk_handle(file_path, chunk_id);
+
+        // Update lookup table
+        match self
+            .filepath_to_chunk_handles
+            .lock()
+            .unwrap()
+            .get_mut(file_path)
+        {
+            Some(handles) => {
+                handles.push(chunk_handle);
+
+                let locations = self.get_locations_for_chunk();
+
+                // TODO: Send Lease Message to one of servers
+
+                let chunk_metadata = ChunkMetadata {
+                    chunk_handle,
+                    locations,
+                };
+
+                chunk_metadata
+            }
+            None => {
+                //Error, file not created, so it is missing in lookup table
+                todo!()
+            }
+        }
+    }
+
+    fn generate_chunk_handle(&self, file_path: &str, chunk_id: u64) -> u64 {
+        let user_id = 1;
+
+        let mut hasher = DefaultHasher::new();
+        user_id.hash(&mut hasher);
+        file_path.hash(&mut hasher);
+        chunk_id.hash(&mut hasher);
+
+        hasher.finish()
+    }
+
+    fn get_locations_for_chunk(&self) -> Vec<String> {
+        // For now will take 3 servers with greatest available space
+        let servers = self.chunk_servers.lock().unwrap();
+
+        let mut entries: Vec<_> = servers.iter().collect();
+        entries.sort_by(|a, b| b.1.available.cmp(&a.1.available));
+
+        // Map the top three entries (if available) to their addresses
+        let servers = entries
+            .iter()
+            .take(3) // Take only the top three entries
+            .map(|(_key, status)| status.address.clone())
+            .collect();
+
+        servers
     }
 }
 
