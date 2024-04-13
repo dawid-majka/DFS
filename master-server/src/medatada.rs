@@ -396,4 +396,41 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn allocate_chunk_should_update_lookup_table() {
+        let metadata = Metadata::new();
+        let mut servers = metadata.chunk_servers.lock().unwrap();
+
+        let server1 = ChunkServerStatus {
+            address: "123".to_string(),
+            used: 1000000,
+            available: 1000000,
+        };
+
+        let server2 = ChunkServerStatus {
+            address: "1234".to_string(),
+            used: 1000000,
+            available: 2000000,
+        };
+
+        let server3 = ChunkServerStatus {
+            address: "12345".to_string(),
+            used: 1000000,
+            available: 3000000,
+        };
+
+        servers.insert(server1.address.clone(), server1);
+        servers.insert(server2.address.clone(), server2);
+        servers.insert(server3.address.clone(), server3);
+
+        drop(servers);
+
+        let file_path = "/test/directory/test_file.txt";
+
+        metadata.create_file(file_path.to_string());
+        let chunk_metadata = metadata.allocate_chunk(file_path, 1);
+
+        assert_eq!(chunk_metadata.locations.len(), 3);
+    }
 }
