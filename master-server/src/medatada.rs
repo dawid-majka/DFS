@@ -1,27 +1,30 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{DefaultHasher, Hash, Hasher},
     io::{Error, ErrorKind},
     sync::Mutex,
+    time::Instant,
 };
 
-use common::master_server::ChunkMetadata;
+use common::master_server::{ChunkMetadata, HeartbeatRequest};
 
 #[derive(Debug)]
 struct ChunkServerStatus {
     address: String,
     used: u64,
     available: u64,
+    chunk_handles: HashSet<String>,
+    last_heartbeat: Instant,
 }
 
 #[derive(Debug)]
 pub struct Metadata {
     namespace: Mutex<Namespace>,
     //TODO: Operation log
-    // stores filename to chunk handles list mapping
-    filepath_to_chunk_handles: Mutex<HashMap<String, Vec<u64>>>,
-    // stores chunk handles locations on chunk servers,
-    chunk_handle_to_chunk_servers: Mutex<HashMap<String, Vec<String>>>,
+    // stores filename to chunk handles list mapping - updated during alloc
+    filepath_to_chunk_handles: Mutex<HashMap<String, HashSet<u64>>>,
+    // stores chunk handles locations on chunk servers - updated in heartbeat
+    chunk_handle_to_chunk_servers: Mutex<HashMap<String, HashSet<String>>>,
     // stores adressess of chunk servers
     chunk_servers: Mutex<HashMap<String, ChunkServerStatus>>,
 }
@@ -58,6 +61,7 @@ impl Metadata {
     pub fn create_file(&self, file_path: String) {
         self.namespace.lock().unwrap().create_file(&file_path);
 
+        // I should probably prevent overriding existing file
         self.filepath_to_chunk_handles
             .lock()
             .unwrap()
@@ -133,6 +137,86 @@ impl Metadata {
             .collect();
 
         servers
+    }
+
+    pub fn heartbeat_update(&self, request: HeartbeatRequest) -> Vec<String> {
+        // This also acts as chunk server registration
+
+        let mut servers = self.chunk_servers.lock().unwrap();
+        let chunk_server_handles = request.chunk_handles.into_iter().collect();
+
+        // Update server status map
+        match servers.get_mut(&request.server_address) {
+            Some(status) => {
+                status.available = request.available;
+                status.used = request.used;
+                status.last_heartbeat = Instant::now();
+                // Save state, will be updated to correct values in next heartbeat
+                // Do i even need this ?
+                status.chunk_handles = chunk_handles;
+            }
+            None => {
+                // Registration
+                let server_status = ChunkServerStatus {
+                    address: request.server_address,
+                    used: request.used,
+                    available: request.available,
+                    chunk_handles: chunk_server_handles,
+                    last_heartbeat: Instant::now(),
+                };
+
+                servers.insert(request.server_address, server_status);
+            }
+        }
+
+        let locations_map = self.chunk_handle_to_chunk_servers.lock().unwrap();
+
+        // Update chunk_handle to locations map
+        for handle in chunk_server_handles.iter() {
+            match locations_map.get_mut(&handle) {
+                Some(locations_set) => {
+                    locations_set.insert(request.server_address);
+                }
+                None => {
+                    // If handle not presend here it means that it was allocated and upload was finished
+                    let mut new_set = HashSet::new();
+                    new_set.insert(request.server_address);
+                    locations_map.insert(handle, new_set);
+                }
+            }
+        }
+
+        //
+
+        // do not have corresponding file or file marked as to_delete
+        let to_delete = self.get_outdated_chunks(&chunk_server_handles);
+
+        to_delete
+    }
+
+    fn get_outdated_chunks(&self, set_to_verify: &HashSet<String>) -> Vec<String> {
+        // Check file 2 chunks map if file present
+
+        let map = self.filepath_to_chunk_handles.lock().unwrap();
+
+        let to_delete = Vec::new();
+
+        for handle in set_to_verify {
+            match map.iter().find(|(k, v)| {
+                if v.contains(handle) {
+                    v
+                }
+            }) {
+                Some((file_name, _)) => {
+                    //TODO: Check if not marked
+                }
+                None => {
+                    to_delete.push(handle.to_owned());
+                }
+            }
+        }
+
+        to_delete
     }
 }
 
@@ -406,18 +490,24 @@ mod tests {
             address: "123".to_string(),
             used: 1000000,
             available: 1000000,
+            chunk_handles: HashSet::new(),
+            last_heartbeat: Instant::now(),
         };
 
         let server2 = ChunkServerStatus {
             address: "1234".to_string(),
             used: 1000000,
             available: 2000000,
+            chunk_handles: HashSet::new(),
+            last_heartbeat: Instant::now(),
         };
 
         let server3 = ChunkServerStatus {
             address: "12345".to_string(),
             used: 1000000,
             available: 3000000,
+            chunk_handles: HashSet::new(),
+            last_heartbeat: Instant::now(),
         };
 
         servers.insert(server1.address.clone(), server1);

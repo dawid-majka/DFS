@@ -13,12 +13,15 @@ impl ChunkService for MasterServer {
         &self,
         request: Request<HeartbeatRequest>,
     ) -> Result<Response<HeartbeatResponse>, Status> {
+        let heartbeat_request = request.into_inner();
+
         info!(
             "Heartbeat from: {} received",
-            request.into_inner().server_address
+            heartbeat_request.server_address
         );
 
-        let to_delete = Vec::<String>::new();
+        // TODO: Should Updata Metadata.chunk_severs list with new data,
+        let to_delete = self.metadata.heartbeat_update(heartbeat_request);
 
         Ok(Response::new(HeartbeatResponse { to_delete }))
     }
