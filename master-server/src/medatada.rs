@@ -65,7 +65,7 @@ impl Metadata {
         self.filepath_to_chunk_handles
             .lock()
             .unwrap()
-            .insert(file_path, Vec::new());
+            .insert(file_path, HashSet::new());
     }
 
     pub fn delete_file(&self, file_path: String) {
@@ -73,6 +73,8 @@ impl Metadata {
 
         // Should i delete it form filepath_to_chunk_handles already
         // or during GC ?
+
+        // During gc, but access should be limited by check to namespace if file has not been marked as to delete
         self.filepath_to_chunk_handles
             .lock()
             .unwrap()
@@ -91,7 +93,7 @@ impl Metadata {
             .get_mut(file_path)
         {
             Some(handles) => {
-                handles.push(chunk_handle);
+                handles.insert(chunk_handle);
 
                 let locations = self.get_locations_for_chunk();
 
@@ -143,7 +145,7 @@ impl Metadata {
         // This also acts as chunk server registration
 
         let mut servers = self.chunk_servers.lock().unwrap();
-        let chunk_server_handles = request.chunk_handles.into_iter().collect();
+        let chunk_server_handles: HashSet<String> = request.chunk_handles.iter().cloned().collect();
 
         // Update server status map
         match servers.get_mut(&request.server_address) {
@@ -153,40 +155,38 @@ impl Metadata {
                 status.last_heartbeat = Instant::now();
                 // Save state, will be updated to correct values in next heartbeat
                 // Do i even need this ?
-                status.chunk_handles = chunk_handles;
+                status.chunk_handles = chunk_server_handles.clone();
             }
             None => {
                 // Registration
                 let server_status = ChunkServerStatus {
-                    address: request.server_address,
+                    address: request.server_address.clone(),
                     used: request.used,
                     available: request.available,
-                    chunk_handles: chunk_server_handles,
+                    chunk_handles: chunk_server_handles.clone(),
                     last_heartbeat: Instant::now(),
                 };
 
-                servers.insert(request.server_address, server_status);
+                servers.insert(request.server_address.clone(), server_status);
             }
         }
 
-        let locations_map = self.chunk_handle_to_chunk_servers.lock().unwrap();
+        let mut locations_map = self.chunk_handle_to_chunk_servers.lock().unwrap();
 
         // Update chunk_handle to locations map
         for handle in chunk_server_handles.iter() {
-            match locations_map.get_mut(&handle) {
+            match locations_map.get_mut(handle) {
                 Some(locations_set) => {
-                    locations_set.insert(request.server_address);
+                    locations_set.insert(request.server_address.clone());
                 }
                 None => {
                     // If handle not presend here it means that it was allocated and upload was finished
                     let mut new_set = HashSet::new();
-                    new_set.insert(request.server_address);
-                    locations_map.insert(handle, new_set);
+                    new_set.insert(request.server_address.clone());
+                    locations_map.insert(handle.to_string(), new_set);
                 }
             }
         }
-
-        //
 
         // do not have corresponding file or file marked as to_delete
         let to_delete = self.get_outdated_chunks(&chunk_server_handles);
@@ -199,18 +199,24 @@ impl Metadata {
 
         let map = self.filepath_to_chunk_handles.lock().unwrap();
 
-        let to_delete = Vec::new();
+        let mut to_delete = Vec::new();
 
         for handle in set_to_verify {
-            match map.iter().find(|(k, v)| {
-                if v.contains(handle) {
-                    v
+            match map.iter().find(|(file_path, file_chunks)| {
+                if file_chunks.contains(&handle.parse().unwrap()) {
+                    return true;
                 }
+                false
             }) {
-                Some((file_name, _)) => {
-                    //TODO: Check if not marked
+                Some((file_path, _)) => {
+                    if !self.namespace.lock().unwrap().is_active(file_path) {
+                        to_delete.push(handle.to_owned());
+                    }
                 }
                 None => {
+                    // File deleted, not present in file_path to chunks map
+                    // File should be deleted after chunks have been deleted, so this scenario is
+                    // possible if chunk server was not operational but get back from the dead and has stale chunks
                     to_delete.push(handle.to_owned());
                 }
             }
@@ -328,6 +334,32 @@ impl Namespace {
             root: Node::Directory {
                 name: "".to_string(),
                 nodes: HashMap::new(),
+            },
+        }
+    }
+
+    //TODO: fix &mut self unnecessary
+    pub fn is_active(&mut self, file_path: &str) -> bool {
+        let mut node = &mut self.root;
+        let file_path = file_path.strip_prefix('/').unwrap();
+
+        for part in file_path.split('/') {
+            // Add validation
+            if part.is_empty() {
+                // Error(Invalid dir name)
+            }
+
+            node = node.get_node(part);
+        }
+
+        match node {
+            Node::Directory { name, nodes } => {
+                // ignore for now, rethink folder deletion later
+                todo!()
+            }
+            Node::File { name, status } => match status {
+                Status::Active => true,
+                Status::Deleted => false,
             },
         }
     }

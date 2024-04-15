@@ -20,7 +20,6 @@ impl ChunkService for MasterServer {
             heartbeat_request.server_address
         );
 
-        // TODO: Should Updata Metadata.chunk_severs list with new data,
         let to_delete = self.metadata.heartbeat_update(heartbeat_request);
 
         Ok(Response::new(HeartbeatResponse { to_delete }))
