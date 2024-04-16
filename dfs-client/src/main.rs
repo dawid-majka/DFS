@@ -25,6 +25,57 @@ impl Client {
         }
     }
 
+    pub async fn mkdir(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut master_client = ClientServiceClient::connect(self.master_address.clone())
+            .await
+            .expect("Client should connect to master server");
+
+        let mkdir_request = Request::new(MkdirRequest {
+            path: path.to_owned(),
+        });
+
+        let mkdir_response = master_client
+            .mkdir(mkdir_request)
+            .await
+            .expect("Master server should return empty response");
+
+        Ok(())
+    }
+
+    pub async fn ls(&self, path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let mut master_client = ClientServiceClient::connect(self.master_address.clone())
+            .await
+            .expect("Client should connect to master server");
+
+        let ls_request = Request::new(LsRequest {
+            path: path.to_owned(),
+        });
+
+        let ls_response = master_client
+            .ls(ls_request)
+            .await
+            .expect("Master server should return list of nodes in directory");
+
+        Ok(ls_response.into_inner().content)
+    }
+
+    pub async fn create_file(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let mut master_client = ClientServiceClient::connect(self.master_address.clone())
+            .await
+            .expect("Client should connect to master server");
+
+        let create_file_request = Request::new(CreateFileRequest {
+            file_path: file_path.to_owned(),
+        });
+
+        let create_file_response = master_client
+            .create_file(create_file_request)
+            .await
+            .expect("Master server should return empty response");
+
+        Ok(())
+    }
+
     pub async fn upload_file(
         &self,
         file_name: &str,
@@ -140,30 +191,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let client = Client::new(&address);
 
-    let file_name = "README.md";
+    client.mkdir("/path/to/new/directory").await.unwrap();
+    client.create_file("/path/to/new/file").await.unwrap();
 
-    let mut file = File::open(file_name).expect("File should be opened.");
-    let mut buffer = Vec::new();
+    let content1 = client.ls("/path").await.unwrap();
+    let content2 = client.ls("/path/to").await.unwrap();
+    let content3 = client.ls("/path/to/new").await.unwrap();
+    let content4 = client.ls("/path/to/new/directory").await.unwrap();
 
-    file.read_to_end(&mut buffer)?;
-    println!("{:?}", buffer);
-
-    let data = Bytes::from(buffer);
-
-    client.upload_file(file_name, data).await;
-
-    // TODO: read file
-    let retrieved_file = client.get_file(file_name).await;
-
-    println!("{:?}", retrieved_file);
-
-    // let mut client = MasterServiceClient::connect("http://[::1]:50051").await?;
-
-    // let request = tonic::Request::new(ListChunkServersRequest {});
-
-    // let response = client.list_chunk_servers(request).await?;
-
-    // println!("list_chunk_servers response={:?}", response);
+    println!("{:?}", content1);
+    println!("{:?}", content2);
+    println!("{:?}", content3);
+    println!("{:?}", content4);
 
     Ok(())
 }
