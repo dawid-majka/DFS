@@ -10,6 +10,7 @@ use crate::server::MasterServer;
 
 mod config;
 mod medatada;
+mod operation_log;
 mod server;
 
 #[tokio::main]

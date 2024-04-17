@@ -8,6 +8,8 @@ use std::{
 
 use common::master_server::{ChunkMetadata, HeartbeatRequest};
 
+use crate::operation_log::OperationLog;
+
 #[derive(Debug)]
 struct ChunkServerStatus {
     address: String,
@@ -21,6 +23,7 @@ struct ChunkServerStatus {
 pub struct Metadata {
     namespace: Mutex<Namespace>,
     //TODO: Operation log
+    operation_log: Mutex<OperationLog>,
     // stores filename to chunk handles list mapping - updated during alloc
     filepath_to_chunk_handles: Mutex<HashMap<String, HashSet<u64>>>,
     // stores chunk handles locations on chunk servers - updated in heartbeat
@@ -32,12 +35,14 @@ pub struct Metadata {
 impl Metadata {
     pub fn new() -> Self {
         let namespace = Mutex::new(Namespace::new());
+        let operation_log = Mutex::new(OperationLog::new());
         let filepath_to_chunk_handles = Mutex::new(HashMap::new());
         let chunk_handle_to_chunk_servers = Mutex::new(HashMap::new());
         let chunk_servers = Mutex::new(HashMap::new());
 
         Metadata {
             namespace,
+            operation_log,
             filepath_to_chunk_handles,
             chunk_handle_to_chunk_servers,
             chunk_servers,
