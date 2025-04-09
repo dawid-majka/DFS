@@ -5,13 +5,13 @@ use server::run;
 
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-use crate::medatada::Metadata;
 use crate::server::MasterServer;
+use crate::storage::metadata::Metadata;
 
 mod config;
-mod medatada;
-mod operation_log;
+mod error;
 mod server;
+mod storage;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

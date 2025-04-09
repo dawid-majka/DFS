@@ -1,1 +1,4 @@
 /target
+/dfs-client/files
+/chunk-server/files
+/master-server/files

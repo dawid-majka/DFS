@@ -8,10 +8,10 @@ use tonic::transport::{Error, Server};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::medatada::Metadata;
+use crate::storage::metadata::Metadata;
 
-mod chunk_service;
-mod client_service;
+pub mod chunk_service;
+pub mod client_service;
 
 #[derive(Debug)]
 pub struct MasterServer {
